@@ -36,11 +36,13 @@ vec4 computeResult(vec2 glyphPos) {
     float previousAge = previousState.g;
     float storedCharVal = previousState.b; // We'll use the 'blue' channel to store the last seed
 
-    // Get current clipboard data
+// Get current clipboard data
     float safeLen = max(clipboardLen, 1.0);
     float charIndex = mod(floor(glyphPos.x * 12.34) + glyphPos.y, safeLen);
     float charVal = texture2D(clipboardTex, vec2((charIndex + 0.5) / safeLen, 0.5)).r;
-    vec2 seedOffset = vec2(charVal * 123.456, charVal * 987.654);
+
+    // FIX: Use fract() to keep the numbers small so the GPU doesn't panic and return 0
+    vec2 seedOffset = fract(vec2(charVal * 12.345, charVal * 98.765)) * 100.0;
 
     // Check if the clipboard data has changed since the last frame
     bool clipboardChanged = abs(charVal - storedCharVal) > 0.001;
@@ -54,7 +56,7 @@ vec4 computeResult(vec2 glyphPos) {
     }
 
     // Save the current character value into the Blue channel so we can check it next frame
-    return vec4(previousSymbol, previousAge, charVal, 1.0);
+    gl_FragColor = vec4(previousSymbol, previousAge, charVal, 1.0);
 }
 
 void main()	{

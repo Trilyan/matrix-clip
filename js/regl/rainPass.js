@@ -31,8 +31,22 @@ export default ({ regl, config, lkg }) => {
 	const updateClipboardTexture = (text) => {
 		if (text && text.length > 0) {
 			clipboardLength = text.length;
-			const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
-			clipboardTexture = make1DTexture(regl, rgbas);
+			// Create a perfectly flat Uint8Array for WebGL
+			const data = new Uint8Array(text.length * 4);
+			for (let i = 0; i < text.length; i++) {
+				data[i * 4] = text.charCodeAt(i); // Red channel: ASCII value
+				data[i * 4 + 1] = 0;              // Green
+				data[i * 4 + 2] = 0;              // Blue
+				data[i * 4 + 3] = 255;            // Alpha
+			}
+			// Bypass make1DTexture and feed it directly to regl
+			clipboardTexture = regl.texture({
+				width: text.length,
+				height: 1,
+				data: data,
+				format: "rgba",
+				type: "uint8"
+			});
 		}
 	};
 
