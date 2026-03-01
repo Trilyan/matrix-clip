@@ -29,52 +29,32 @@ highp float randomFloat( const in vec2 uv ) {
 }
 
 // Main function
-vec4 computeResult(float simTime, bool isFirstFrame, vec2 glyphPos, vec2 screenPos, vec4 previous, vec4 raindrop) {
+vec4 computeResult(vec2 glyphPos) {
+    vec2 screenPos = floor(glyphPos);
+    vec4 previousState = texture2D(previousSymbolState, glyphPos / vec2(numColumns, numRows));
+    float previousSymbol = previousState.r;
+    float previousAge = previousState.g;
+    float storedCharVal = previousState.b; // We'll use the 'blue' channel to store the last seed
 
-	float previousSymbol = previous.r;
-	float previousAge = previous.g;
-	bool resetGlyph = isFirstFrame;
-	if (loops) {
-		resetGlyph = resetGlyph || raindrop.r <= 0.;
-	}
+    // Get current clipboard data
+    float safeLen = max(clipboardLen, 1.0);
+    float charIndex = mod(floor(glyphPos.x * 12.34) + glyphPos.y, safeLen);
+    float charVal = texture2D(clipboardTex, vec2((charIndex + 0.5) / safeLen, 0.5)).r;
+    vec2 seedOffset = vec2(charVal * 123.456, charVal * 987.654);
 
-	// --- NEW: Extract a seed from the clipboard texture ---
-	// Safely wrap the index based on clipboard length
-	float safeLen = max(clipboardLen, 1.0);
-	
-	// Sample a different letter of the clipboard for different parts of the screen
-	float charIndex = mod(floor(glyphPos.x * 12.34) + glyphPos.y, safeLen);
-	float u = (charIndex + 0.5) / safeLen;
-	
-	// Get the ASCII value from the texture (0.0 to 1.0)
-	float charVal = texture2D(clipboardTex, vec2(u, 0.5)).r;
-	
-	// Multiply by large numbers to create drastically different "seed offsets" 
-	// based on the specific text in the clipboard.
-	// If charVal is 0 (no clipboard read yet), seedOffset is vec2(0, 0).
-	vec2 seedOffset = vec2(charVal * 123.456, charVal * 987.654);
+    // Check if the clipboard data has changed since the last frame
+    bool clipboardChanged = abs(charVal - storedCharVal) > 0.001;
 
-	if (resetGlyph) {
-		// Inject the clipboard seed offset into the randomness
-		previousAge = randomFloat(screenPos + 0.5 + seedOffset);
-		previousSymbol = floor(glyphSequenceLength * randomFloat(screenPos + seedOffset));
-	}
-	
-	float cycleSpeed = animationSpeed * cycleSpeed;
-	float age = previousAge;
-	float symbol = previousSymbol;
-	
-	if (mod(tick, cycleFrameSkip) == 0.) {
-		age += cycleSpeed * cycleFrameSkip;
-		if (age >= 1.) {
-			// Inject the clipboard seed offset here as well
-			symbol = floor(glyphSequenceLength * randomFloat(screenPos + simTime + seedOffset));
-			age = fract(age);
-		}
-	}
+    // Normal logic: reset if the glyph is new OR if the clipboard just changed
+    if (resetGlyph || clipboardChanged) {
+        previousAge = randomFloat(screenPos + 0.5 + seedOffset);
+        previousSymbol = floor(glyphSequenceLength * randomFloat(screenPos + seedOffset));
+    } else if (cycleSpeed > 0.0 && mod(tick, cycleFrameSkip) < 1.0) {
+        previousSymbol = floor(glyphSequenceLength * randomFloat(screenPos + tick + seedOffset));
+    }
 
-	vec4 result = vec4(symbol, age, 0., 0.);
-	return result;
+    // Save the current character value into the Blue channel so we can check it next frame
+    return vec4(previousSymbol, previousAge, charVal, 1.0);
 }
 
 void main()	{

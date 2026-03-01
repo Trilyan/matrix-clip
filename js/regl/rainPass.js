@@ -102,12 +102,14 @@ export default ({ regl, config, lkg }) => {
 		showDebugView,
 	};
 
-	const introDoubleBuffer = makeComputeDoubleBuffer(regl, 1, numColumns);
-	const rainPassIntro = loadText("shaders/glsl/rainPass.intro.frag.glsl");
-	const introUniforms = {
-		...commonUniforms,
-		...extractEntries(config, ["fallSpeed", "skipIntro"]),
-	};
+	const makeComputeDoubleBuffer = (regl, height, width) =>
+	makeDoubleBuffer(regl, {
+		width,
+		height,
+		wrapT: "clamp",
+		type: "half float",
+		data: Array(width * height * 4).fill(0) // This ensures the 'Blue' channel starts at 0
+	});
 	const intro = regl({
 		frag: regl.prop("frag"),
 		uniforms: {
