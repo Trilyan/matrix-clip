@@ -31,7 +31,7 @@ const brVert = [1, 1];
 const quadVertices = [tlVert, trVert, brVert, tlVert, brVert, blVert];
 
 export default ({ regl, config, lkg }) => {
-	// --- NEW: Universal Clipboard Integration ---
+	// Browser-Specific Clipboard Integration ---
 	let clipboardLength = 1;
 	let clipboardTexture = makePassTexture(regl, false); 
 
@@ -43,17 +43,34 @@ export default ({ regl, config, lkg }) => {
 		}
 	};
 
-	// Use "click" instead of "pointerdown" so Safari's native Paste menu doesn't vanish
-	window.addEventListener("click", async () => {
+	// 1. ALWAYS listen for manual pasting (Cmd+V works beautifully everywhere)
+	window.addEventListener("paste", (event) => {
 		try {
-			const text = await navigator.clipboard.readText();
-			console.log("Matrix Seeded via Click:", text);
+			const text = (event.clipboardData || window.clipboardData).getData('text');
+			console.log("Matrix Seeded via Paste:", text);
 			updateClipboardTexture(text);
 		} catch (err) {
-			console.warn("Clipboard access denied. Ensure page is focused.", err);
+			console.error("Paste failed", err);
 		}
 	});
-	// --- END NEW ---
+
+	// 2. Detect Safari. (Note: Chrome's user agent also includes "Safari", so we must exclude it)
+	const isChrome = navigator.userAgent.includes("Chrome");
+	const isSafari = navigator.userAgent.includes("Safari") && !isChrome;
+
+	// 3. Only add the "click to read" feature if we are NOT in Safari
+	if (!isSafari) {
+		window.addEventListener("click", async () => {
+			try {
+				const text = await navigator.clipboard.readText();
+				console.log("Matrix Seeded via Click:", text);
+				updateClipboardTexture(text);
+			} catch (err) {
+				console.warn("Clipboard access denied. Ensure page is focused.", err);
+			}
+		});
+	}
+	// --- END ---
 
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
