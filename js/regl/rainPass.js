@@ -31,25 +31,29 @@ const brVert = [1, 1];
 const quadVertices = [tlVert, trVert, brVert, tlVert, brVert, blVert];
 
 export default ({ regl, config, lkg }) => {
-
-	// 1. Initialize with a blank 1x1 texture
+	// --- NEW: Universal Clipboard Integration ---
 	let clipboardLength = 1;
 	let clipboardTexture = makePassTexture(regl, false); 
 
-	// 2. Piggyback on the user's click (which also causes the ripple)
-	window.addEventListener("pointerdown", async () => {
-    try {
-        const text = await navigator.clipboard.readText();
-        console.log("Clipboard Read Success:", text); // NEW: This verifies the handshake
-        if (text && text.length > 0) {
-            clipboardLength = text.length;
-            const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
-            clipboardTexture = make1DTexture(regl, rgbas);
-        }
-    } catch (err) {
-        console.warn("Clipboard access denied. Click the page to focus!", err);
-    }
-});
+	const updateClipboardTexture = (text) => {
+		if (text && text.length > 0) {
+			clipboardLength = text.length;
+			const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
+			clipboardTexture = make1DTexture(regl, rgbas);
+		}
+	};
+
+	// Use "click" instead of "pointerdown" so Safari's native Paste menu doesn't vanish
+	window.addEventListener("click", async () => {
+		try {
+			const text = await navigator.clipboard.readText();
+			console.log("Matrix Seeded via Click:", text);
+			updateClipboardTexture(text);
+		} catch (err) {
+			console.warn("Clipboard access denied. Ensure page is focused.", err);
+		}
+	});
+	// --- END NEW ---
 
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
@@ -116,11 +120,13 @@ export default ({ regl, config, lkg }) => {
 
 	const symbolDoubleBuffer = makeComputeDoubleBuffer(regl, numRows, numColumns);
 	const rainPassSymbol = loadText("shaders/glsl/rainPass.symbol.frag.glsl");
+	
+	// --- MODIFIED: Pass dynamic clipboard uniforms ---
 	const symbolUniforms = {
 		...commonUniforms,
 		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops"]),
-		clipboardTex: () => clipboardTexture, // Evaluates dynamically
-		clipboardLen: () => clipboardLength   // Evaluates dynamically
+		clipboardTex: () => clipboardTexture,
+		clipboardLen: () => clipboardLength
 	};
 	const symbol = regl({
 		frag: regl.prop("frag"),
