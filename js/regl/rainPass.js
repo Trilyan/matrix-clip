@@ -1,4 +1,5 @@
 import { loadImage, loadText, makePassFBO, makeDoubleBuffer, makePass } from "./utils.js";
+import { loadImage, loadText, makePassFBO, makeDoubleBuffer, makePass, make1DTexture, makePassTexture } from "./utils.js";
 
 const extractEntries = (src, keys) => Object.fromEntries(Array.from(Object.entries(src)).filter(([key]) => keys.includes(key)));
 
@@ -31,6 +32,29 @@ const brVert = [1, 1];
 const quadVertices = [tlVert, trVert, brVert, tlVert, brVert, blVert];
 
 export default ({ regl, config, lkg }) => {
+
+	// 1. Initialize with a blank 1x1 texture
+	let clipboardLength = 1;
+	let clipboardTexture = makePassTexture(regl, false); 
+
+	// 2. Piggyback on the user's click (which also causes the ripple)
+	window.addEventListener("pointerdown", async () => {
+		try {
+			const text = await navigator.clipboard.readText();
+			if (text && text.length > 0) {
+				clipboardLength = text.length;
+				
+				// Map each character to an RGBA pixel array (ASCII code goes in the Red channel)
+				const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
+				
+				// Re-create the texture with the new clipboard data
+				clipboardTexture = make1DTexture(regl, rgbas);
+			}
+		} catch (err) {
+			console.warn("Could not read clipboard. Browser permission may be denied.", err);
+		}
+	});
+
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
 	// The volumetric mode multiplies the number of columns
@@ -99,6 +123,8 @@ export default ({ regl, config, lkg }) => {
 	const symbolUniforms = {
 		...commonUniforms,
 		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops"]),
+		clipboardTex: () => clipboardTexture, // Evaluates dynamically
+		clipboardLen: () => clipboardLength   // Evaluates dynamically
 	};
 	const symbol = regl({
 		frag: regl.prop("frag"),
