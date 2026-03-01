@@ -1,73 +1,68 @@
 precision highp float;
 
-// This shader governs the glyphs appearing in the rain.
-// It writes each glyph's state to the channels of a data texture:
-// 		R: symbol
-// 		G: age
-// 		B: stored clipboard seed
-// 		A: unused
-
 #define PI 3.14159265359
 
-uniform sampler2D previousSymbolState, raindropState;
-// --- NEW: Our Clipboard Uniforms ---
+uniform sampler2D previousSymbolState;
+uniform sampler2D raindropState;
 uniform sampler2D clipboardTex;
-uniform float clipboardLen;
 
-uniform float numColumns, numRows;
-uniform float time, tick, cycleFrameSkip;
-uniform float animationSpeed, cycleSpeed;
-uniform bool loops, showDebugView;
+uniform float clipboardLen;
+uniform float numColumns;
+uniform float numRows;
+uniform float time;
+uniform float tick;
+uniform float cycleFrameSkip;
+uniform float animationSpeed;
+uniform float cycleSpeed;
+uniform bool loops;
+uniform bool showDebugView;
 uniform float glyphSequenceLength;
 
-// Helper functions for generating randomness, borrowed from elsewhere
 highp float randomFloat( const in vec2 uv ) {
-	const highp float a = 12.9898, b = 78.233, c = 43758.5453;
-	highp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );
-	return fract(sin(sn) * c);
+    const highp float a = 12.9898, b = 78.233, c = 43758.5453;
+    highp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );
+    return fract(sin(sn) * c);
 }
 
-// Main function matching the 6 arguments passed from main()
-vec4 computeResult(float simTime, bool isFirstFrame, vec2 glyphPos, vec2 screenPos, vec4 previous, vec4 raindrop) {
+// Kept unflattened, matching the 6 arguments passed from main exactly
+vec4 computeResult(float simTime, bool isFirstFrame, vec2 glyphPos, vec2 uvPos, vec4 previous, vec4 raindrop) {
+    // Isolate the integer pixel position for distinct random seeds
+    vec2 cellPos = floor(glyphPos);
+    
     float previousSymbol = previous.r;
     float previousAge = previous.g;
-    float storedCharVal = previous.b; // We use the 'blue' channel to store the last seed
+    float storedCharVal = previous.b;
 
-    // Get current clipboard data
+    // Safely read the clipboard texture
     float safeLen = max(clipboardLen, 1.0);
     float charIndex = mod(floor(glyphPos.x * 12.34) + glyphPos.y, safeLen);
     float charVal = texture2D(clipboardTex, vec2((charIndex + 0.5) / safeLen, 0.5)).r;
     
-    // Use fract() to keep the numbers small so the GPU doesn't panic
+    // Keep numbers small so the GPU random generator doesn't overflow
     vec2 seedOffset = fract(vec2(charVal * 12.345, charVal * 98.765)) * 100.0;
     
-    // Check if the clipboard data has changed since the last frame
     bool clipboardChanged = abs(charVal - storedCharVal) > 0.001;
+    bool resetGlyph = isFirstFrame || (previousAge != raindrop.g);
 
-    // Define when a glyph naturally resets (first frame or if the falling drop loops)
-    bool resetGlyph = isFirstFrame || (previousAge > raindrop.g);
-
-    // Normal logic: reset if the glyph is new OR if the clipboard just changed
     if (resetGlyph || clipboardChanged) {
-        previousAge = raindrop.g; // Sync age
-        previousSymbol = floor(glyphSequenceLength * randomFloat(screenPos + seedOffset));
+        previousAge = raindrop.g;
+        previousSymbol = floor(glyphSequenceLength * randomFloat(cellPos + seedOffset));
     } else if (cycleSpeed > 0.0 && mod(tick, cycleFrameSkip) < 1.0) {
-        previousSymbol = floor(glyphSequenceLength * randomFloat(screenPos + tick + seedOffset));
+        // STRICT CASTING: vec2(tick, tick) ensures the GPU compiler doesn't choke on type mismatches
+        previousSymbol = floor(glyphSequenceLength * randomFloat(cellPos + vec2(tick, tick) + seedOffset));
     }
 
-    // Save the current character value into the Blue channel and RETURN it
     return vec4(previousSymbol, previousAge, charVal, 1.0);
 }
 
-void main()	{
-	float simTime = time * animationSpeed;
-	bool isFirstFrame = tick <= 1.;
-	vec2 glyphPos = gl_FragCoord.xy;
-	vec2 screenPos = glyphPos / vec2(numColumns, numRows);
-	
-	vec4 previous = texture2D( previousSymbolState, screenPos );
-	vec4 raindrop = texture2D( raindropState, screenPos );
-	
-	// Pass all 6 arguments to computeResult
-	gl_FragColor = computeResult(simTime, isFirstFrame, glyphPos, screenPos, previous, raindrop);
+void main() {
+    float simTime = time * animationSpeed;
+    bool isFirstFrame = (tick <= 1.0);
+    vec2 glyphPos = gl_FragCoord.xy;
+    vec2 uvPos = glyphPos / vec2(numColumns, numRows);
+    
+    vec4 previous = texture2D(previousSymbolState, uvPos);
+    vec4 raindrop = texture2D(raindropState, uvPos);
+    
+    gl_FragColor = computeResult(simTime, isFirstFrame, glyphPos, uvPos, previous, raindrop);
 }
