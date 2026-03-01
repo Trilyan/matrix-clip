@@ -7,20 +7,13 @@ const rippleTypes = {
 	circle: 1,
 };
 
-// These compute buffers are used to compute the properties of cells in the grid.
-// They take turns being the source and destination of a "compute" shader.
-// The half float data type is crucial! It lets us store almost any real number,
-// whereas the default type limits us to integers between 0 and 255.
-
-// These double buffers are smaller than the screen, because their pixels correspond
-// with cells in the grid, and the cells' glyphs are much larger than a pixel.
 const makeComputeDoubleBuffer = (regl, height, width) =>
 	makeDoubleBuffer(regl, {
 		width,
 		height,
 		wrapT: "clamp",
 		type: "half float",
-		data: Array(width * height * 4).fill(0)
+		data: Array(width * height * 4).fill(0) // The 'blue' channel starts at 0 for our static seed check
 	});
 
 const numVerticesPerQuad = 2 * 3;
@@ -31,7 +24,7 @@ const brVert = [1, 1];
 const quadVertices = [tlVert, trVert, brVert, tlVert, brVert, blVert];
 
 export default ({ regl, config, lkg }) => {
-	// Browser-Specific Clipboard Integration ---
+	// --- Universal Clipboard Integration ---
 	let clipboardLength = 1;
 	let clipboardTexture = makePassTexture(regl, false); 
 
@@ -54,7 +47,7 @@ export default ({ regl, config, lkg }) => {
 		}
 	});
 
-	// 2. Detect Safari. (Note: Chrome's user agent also includes "Safari", so we must exclude it)
+	// 2. Detect Safari vs Chrome
 	const isChrome = navigator.userAgent.includes("Chrome");
 	const isSafari = navigator.userAgent.includes("Safari") && !isChrome;
 
@@ -70,23 +63,18 @@ export default ({ regl, config, lkg }) => {
 			}
 		});
 	}
-	// --- END ---
+	// --- END Clipboard Integration ---
 
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
-	// The volumetric mode multiplies the number of columns
-	// to reach the desired density, and then overlaps them
 	const volumetric = config.volumetric;
 	const density = volumetric && config.effect !== "none" ? config.density : 1;
 	const [numRows, numColumns] = [config.numColumns, Math.floor(config.numColumns * density)];
 
-	// The volumetric mode requires us to create a grid of quads,
-	// rather than a single quad for our geometry
 	const [numQuadRows, numQuadColumns] = volumetric ? [numRows, numColumns] : [1, 1];
 	const numQuads = numQuadRows * numQuadColumns;
 	const quadSize = [1 / numQuadColumns, 1 / numQuadRows];
 
-	// Various effect-related values
 	const rippleType = config.rippleTypeName in rippleTypes ? rippleTypes[config.rippleTypeName] : -1;
 	const slantVec = [Math.cos(config.slant), Math.sin(config.slant)];
 	const slantScale = 1 / (Math.abs(Math.sin(2 * config.slant)) * (Math.sqrt(2) - 1) + 1);
@@ -102,21 +90,18 @@ export default ({ regl, config, lkg }) => {
 		showDebugView,
 	};
 
-	const makeComputeDoubleBuffer = (regl, height, width) =>
-	makeDoubleBuffer(regl, {
-		width,
-		height,
-		wrapT: "clamp",
-		type: "half float",
-		data: Array(width * height * 4).fill(0) // This ensures the 'Blue' channel starts at 0
-	});
+	const introDoubleBuffer = makeComputeDoubleBuffer(regl, 1, numColumns);
+	const rainPassIntro = loadText("shaders/glsl/rainPass.intro.frag.glsl");
+	const introUniforms = {
+		...commonUniforms,
+		...extractEntries(config, ["fallSpeed", "skipIntro"]),
+	};
 	const intro = regl({
 		frag: regl.prop("frag"),
 		uniforms: {
 			...introUniforms,
 			previousIntroState: introDoubleBuffer.back,
 		},
-
 		framebuffer: introDoubleBuffer.front,
 	});
 
@@ -133,14 +118,12 @@ export default ({ regl, config, lkg }) => {
 			introState: introDoubleBuffer.front,
 			previousRaindropState: raindropDoubleBuffer.back,
 		},
-
 		framebuffer: raindropDoubleBuffer.front,
 	});
 
 	const symbolDoubleBuffer = makeComputeDoubleBuffer(regl, numRows, numColumns);
 	const rainPassSymbol = loadText("shaders/glsl/rainPass.symbol.frag.glsl");
 	
-	// --- MODIFIED: Pass dynamic clipboard uniforms ---
 	const symbolUniforms = {
 		...commonUniforms,
 		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops"]),
@@ -154,7 +137,6 @@ export default ({ regl, config, lkg }) => {
 			raindropState: raindropDoubleBuffer.front,
 			previousSymbolState: symbolDoubleBuffer.back,
 		},
-
 		framebuffer: symbolDoubleBuffer.front,
 	});
 
@@ -172,7 +154,6 @@ export default ({ regl, config, lkg }) => {
 			raindropState: raindropDoubleBuffer.front,
 			previousEffectState: effectDoubleBuffer.back,
 		},
-
 		framebuffer: effectDoubleBuffer.front,
 	});
 
@@ -184,7 +165,6 @@ export default ({ regl, config, lkg }) => {
 				.map((_, x) => Array(numVerticesPerQuad).fill([x, y]))
 		);
 
-	// We render the code into an FBO using MSDFs: https://github.com/Chlumsky/msdfgen
 	const glyphMSDF = loadImage(regl, config.glyphMSDFURL);
 	const glintMSDF = loadImage(regl, config.glintMSDFURL);
 	const baseTexture = loadImage(regl, config.baseTextureURL, true);
@@ -195,10 +175,8 @@ export default ({ regl, config, lkg }) => {
 	const renderUniforms = {
 		...commonUniforms,
 		...extractEntries(config, [
-			// vertex
 			"forwardSpeed",
 			"glyphVerticalSpacing",
-			// fragment
 			"baseBrightness",
 			"baseContrast",
 			"glintBrightness",
@@ -234,7 +212,6 @@ export default ({ regl, config, lkg }) => {
 
 		uniforms: {
 			...renderUniforms,
-
 			raindropState: raindropDoubleBuffer.front,
 			symbolState: symbolDoubleBuffer.front,
 			effectState: effectDoubleBuffer.front,
@@ -242,28 +219,22 @@ export default ({ regl, config, lkg }) => {
 			glintMSDF: glintMSDF.texture,
 			baseTexture: baseTexture.texture,
 			glintTexture: glintTexture.texture,
-
 			msdfPxRange: 4.0,
 			glyphMSDFSize: () => [glyphMSDF.width(), glyphMSDF.height()],
 			glintMSDFSize: () => [glintMSDF.width(), glintMSDF.height()],
-
 			camera: regl.prop("camera"),
 			transform: regl.prop("transform"),
 			screenSize: regl.prop("screenSize"),
 		},
-
 		viewport: regl.prop("viewport"),
-
 		attributes: {
 			aPosition: quadPositions,
 			aCorner: Array(numQuads).fill(quadVertices),
 		},
 		count: numQuads * numVerticesPerQuad,
-
 		framebuffer: output,
 	});
 
-	// Camera and transform math for the volumetric mode
 	const screenSize = [1, 1];
 	const transform = mat4.create();
 	if (volumetric && config.isometric) {
@@ -320,7 +291,7 @@ export default ({ regl, config, lkg }) => {
 					} else if (lkg.enabled) {
 						mat4.perspective(camera, (Math.PI / 180) * lkg.fov, lkg.quiltAspect, 0.0001, 1000);
 
-						const distanceToTarget = -1; // TODO: Get from somewhere else
+						const distanceToTarget = -1;
 						let vantagePointAngle = (Math.PI / 180) * lkg.viewCone * (index / (numVantagePoints - 1) - 0.5);
 						if (isNaN(vantagePointAngle)) {
 							vantagePointAngle = 0;
@@ -329,7 +300,7 @@ export default ({ regl, config, lkg }) => {
 
 						mat4.translate(camera, camera, vec3.fromValues(xOffset, 0, 0));
 
-						camera[8] = -xOffset / (distanceToTarget * Math.tan((Math.PI / 180) * 0.5 * lkg.fov) * lkg.quiltAspect); // Is this right??
+						camera[8] = -xOffset / (distanceToTarget * Math.tan((Math.PI / 180) * 0.5 * lkg.fov) * lkg.quiltAspect);
 					} else {
 						mat4.perspective(camera, (Math.PI / 180) * 90, aspectRatio, 0.0001, 1000);
 					}
