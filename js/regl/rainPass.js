@@ -38,21 +38,18 @@ export default ({ regl, config, lkg }) => {
 
 	// 2. Piggyback on the user's click (which also causes the ripple)
 	window.addEventListener("pointerdown", async () => {
-		try {
-			const text = await navigator.clipboard.readText();
-			if (text && text.length > 0) {
-				clipboardLength = text.length;
-				
-				// Map each character to an RGBA pixel array (ASCII code goes in the Red channel)
-				const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
-				
-				// Re-create the texture with the new clipboard data
-				clipboardTexture = make1DTexture(regl, rgbas);
-			}
-		} catch (err) {
-			console.warn("Could not read clipboard. Browser permission may be denied.", err);
-		}
-	});
+    try {
+        const text = await navigator.clipboard.readText();
+        console.log("Clipboard Read Success:", text); // NEW: This verifies the handshake
+        if (text && text.length > 0) {
+            clipboardLength = text.length;
+            const rgbas = text.split('').map(char => [char.charCodeAt(0) / 255.0, 0, 0, 0]);
+            clipboardTexture = make1DTexture(regl, rgbas);
+        }
+    } catch (err) {
+        console.warn("Clipboard access denied. Click the page to focus!", err);
+    }
+});
 
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
