@@ -1,4 +1,3 @@
-import { loadImage, loadText, makePassFBO, makeDoubleBuffer, makePass } from "./utils.js";
 import { loadImage, loadText, makePassFBO, makeDoubleBuffer, makePass, make1DTexture, makePassTexture } from "./utils.js";
 
 const extractEntries = (src, keys) => Object.fromEntries(Array.from(Object.entries(src)).filter(([key]) => keys.includes(key)));
