@@ -19,6 +19,7 @@ uniform float cycleSpeed;
 uniform float rippleSpeed;
 uniform float seedRippleTime;
 uniform vec2 seedRipplePos;
+uniform float sysTime; // ADDED BACK
 // ----------------------------
 
 uniform bool loops;
@@ -48,10 +49,9 @@ vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPo
     vec2 aspect = vec2(numColumns / numRows, 1.0);
     float distToClick = distance(uvPos * aspect, seedRipplePos * aspect);
     
-    // Calculate radius using simTimeArg and rippleSpeed to match the visual effect
-    float elapsedTime = simTimeArg - seedRippleTime;
+    // FIX: Calculate using real time, but scale by animationSpeed so the wave matches the visual distortion
+    float elapsedTime = (sysTime - seedRippleTime) * animationSpeed;
     
-    // We multiply by 0.5 or adjust this multiplier to perfectly align with the 'effect' pass
     float currentRippleRadius = elapsedTime * rippleSpeed * 0.5;
     
     if (distToClick < currentRippleRadius) {
@@ -75,7 +75,6 @@ vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPo
 }
 
 void main() {
-    // This is safe now because we removed the 'uniform float simTime;' from the top!
     float simTime = time * animationSpeed;
     bool isFirstFrame = (tick <= 1.0);
     vec2 glyphPos = gl_FragCoord.xy;

@@ -54,7 +54,7 @@ export default ({ regl, config, lkg }) => {
 			});
 			
 			// Start the ripple timer and grab the click coordinates
-			seedRippleTime = config.time * config.animationSpeed;
+			seedRippleTime = performance.now() / 1000.0; // FIX: Use real-world time
 			if (event && event.clientX !== undefined) {
 				seedRipplePos = [event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight)];
 			} else {
@@ -164,7 +164,7 @@ export default ({ regl, config, lkg }) => {
 		clipboardLen: () => clipboardLength,
 		seedRippleTime: () => seedRippleTime,
 		seedRipplePos: () => seedRipplePos,
-		simTime: ({time}) => time * config.animationSpeed // Pass the synced time
+		sysTime: () => performance.now() / 1000.0 // FIX: Pass real-world time to the GPU
 	};
 	const symbol = regl({
 		frag: regl.prop("frag"),
