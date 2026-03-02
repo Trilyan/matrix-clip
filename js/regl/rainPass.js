@@ -28,9 +28,11 @@ export default ({ regl, config, lkg }) => {
 	let clipboardLength = 1;
 	let clipboardTexture = makePassTexture(regl, false); 
 	
-	// NEW: State for our expanding ripple
 	let seedRippleTime = -9999.0;
 	let seedRipplePos = [0.5, 0.5];
+	
+	// NEW: Store the pasted text until the user clicks
+	let stagedText = null;
 
 	const updateClipboardTexture = (text, event) => {
 		if (text && text.length > 0) {
@@ -50,23 +52,21 @@ export default ({ regl, config, lkg }) => {
 				type: "uint8"
 			});
 			
-			// NEW: Track time and position for the radial reveal
+			// Start the ripple timer and grab the click coordinates
 			seedRippleTime = performance.now() / 1000.0;
 			if (event && event.clientX !== undefined) {
-				// Map browser coordinates to WebGL coordinates
 				seedRipplePos = [event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight)];
 			} else {
-				// If pasted via keyboard, default the ripple to the center
 				seedRipplePos = [0.5, 0.5]; 
 			}
 		}
 	};
 
-	// 1. ALWAYS listen for manual pasting (Cmd+V works beautifully everywhere)
+	// 1. Listen for manual pasting, but ONLY STAGE the text
 	window.addEventListener("paste", (event) => {
 		try {
-			const text = (event.clipboardData || window.clipboardData).getData('text');
-			updateClipboardTexture(text, event); // Pass the event!
+			stagedText = (event.clipboardData || window.clipboardData).getData('text');
+			console.log("Matrix Seed Staged! Click the screen to unleash the ripple.");
 		} catch (err) {
 			console.error("Paste failed", err);
 		}
@@ -76,19 +76,27 @@ export default ({ regl, config, lkg }) => {
 	const isChrome = navigator.userAgent.includes("Chrome");
 	const isSafari = navigator.userAgent.includes("Safari") && !isChrome;
 
-	// 3. Only add the "click to read" feature if we are NOT in Safari
-	if (!isSafari) {
-		window.addEventListener("click", async (event) => {
+	// 3. Universal Click Listener (The Trigger)
+	window.addEventListener("click", async (event) => {
+		// If we have text waiting from a Cmd+V paste, use it immediately
+		if (stagedText) {
+			console.log("Unleashing Staged Seed:", stagedText);
+			updateClipboardTexture(stagedText, event);
+			stagedText = null; // Clear it so we don't re-trigger it on the next click
+		} 
+		// Otherwise, if we are in Chrome and nothing is staged, auto-read the clipboard
+		else if (!isSafari) {
 			try {
 				const text = await navigator.clipboard.readText();
-				updateClipboardTexture(text, event); // Pass the event!
+				console.log("Matrix Seeded via Auto-Click:", text);
+				updateClipboardTexture(text, event);
 			} catch (err) {
 				console.warn("Clipboard access denied. Ensure page is focused.", err);
 			}
-		});
-	}
+		}
+	});
 	// --- END Clipboard Integration ---
-
+	
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
 	const volumetric = config.volumetric;
