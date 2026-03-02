@@ -24,22 +24,24 @@ const brVert = [1, 1];
 const quadVertices = [tlVert, trVert, brVert, tlVert, brVert, blVert];
 
 export default ({ regl, config, lkg }) => {
-	// --- Universal Clipboard Integration ---
+// --- Universal Clipboard Integration ---
 	let clipboardLength = 1;
 	let clipboardTexture = makePassTexture(regl, false); 
+	
+	// NEW: State for our expanding ripple
+	let seedRippleTime = -9999.0;
+	let seedRipplePos = [0.5, 0.5];
 
-	const updateClipboardTexture = (text) => {
+	const updateClipboardTexture = (text, event) => {
 		if (text && text.length > 0) {
 			clipboardLength = text.length;
-			// Create a perfectly flat Uint8Array for WebGL
 			const data = new Uint8Array(text.length * 4);
 			for (let i = 0; i < text.length; i++) {
-				data[i * 4] = text.charCodeAt(i); // Red channel: ASCII value
-				data[i * 4 + 1] = 0;              // Green
-				data[i * 4 + 2] = 0;              // Blue
-				data[i * 4 + 3] = 255;            // Alpha
+				data[i * 4] = text.charCodeAt(i);
+				data[i * 4 + 1] = 0;
+				data[i * 4 + 2] = 0;
+				data[i * 4 + 3] = 255;
 			}
-			// Bypass make1DTexture and feed it directly to regl
 			clipboardTexture = regl.texture({
 				width: text.length,
 				height: 1,
@@ -47,6 +49,16 @@ export default ({ regl, config, lkg }) => {
 				format: "rgba",
 				type: "uint8"
 			});
+			
+			// NEW: Track time and position for the radial reveal
+			seedRippleTime = performance.now() / 1000.0;
+			if (event && event.clientX !== undefined) {
+				// Map browser coordinates to WebGL coordinates
+				seedRipplePos = [event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight)];
+			} else {
+				// If pasted via keyboard, default the ripple to the center
+				seedRipplePos = [0.5, 0.5]; 
+			}
 		}
 	};
 
@@ -54,8 +66,7 @@ export default ({ regl, config, lkg }) => {
 	window.addEventListener("paste", (event) => {
 		try {
 			const text = (event.clipboardData || window.clipboardData).getData('text');
-			console.log("Matrix Seeded via Paste:", text);
-			updateClipboardTexture(text);
+			updateClipboardTexture(text, event); // Pass the event!
 		} catch (err) {
 			console.error("Paste failed", err);
 		}
@@ -67,11 +78,10 @@ export default ({ regl, config, lkg }) => {
 
 	// 3. Only add the "click to read" feature if we are NOT in Safari
 	if (!isSafari) {
-		window.addEventListener("click", async () => {
+		window.addEventListener("click", async (event) => {
 			try {
 				const text = await navigator.clipboard.readText();
-				console.log("Matrix Seeded via Click:", text);
-				updateClipboardTexture(text);
+				updateClipboardTexture(text, event); // Pass the event!
 			} catch (err) {
 				console.warn("Clipboard access denied. Ensure page is focused.", err);
 			}
@@ -140,9 +150,14 @@ export default ({ regl, config, lkg }) => {
 	
 	const symbolUniforms = {
 		...commonUniforms,
-		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops"]),
+		// ADD "rippleSpeed" to this array so we can sync the math
+		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops", "rippleSpeed"]),
 		clipboardTex: () => clipboardTexture,
-		clipboardLen: () => clipboardLength
+		clipboardLen: () => clipboardLength,
+		// ADD our new ripple tracking uniforms
+		seedRippleTime: () => seedRippleTime,
+		seedRipplePos: () => seedRipplePos,
+		sysTime: () => performance.now() / 1000.0
 	};
 	const symbol = regl({
 		frag: regl.prop("frag"),

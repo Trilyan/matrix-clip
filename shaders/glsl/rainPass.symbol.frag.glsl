@@ -14,6 +14,14 @@ uniform float tick;
 uniform float cycleFrameSkip;
 uniform float animationSpeed;
 uniform float cycleSpeed;
+
+// --- NEW: Ripple Uniforms ---
+uniform float rippleSpeed;
+uniform float seedRippleTime;
+uniform vec2 seedRipplePos;
+uniform float sysTime;
+// ----------------------------
+
 uniform bool loops;
 uniform bool showDebugView;
 uniform float glyphSequenceLength;
@@ -24,35 +32,50 @@ highp float randomFloat( const in vec2 uv ) {
     return fract(sin(sn) * c);
 }
 
-// Kept unflattened, matching the 6 arguments passed from main exactly
 vec4 computeResult(float simTime, bool isFirstFrame, vec2 glyphPos, vec2 uvPos, vec4 previous, vec4 raindrop) {
-    // Isolate the integer pixel position for distinct random seeds
     vec2 cellPos = floor(glyphPos);
     
     float previousSymbol = previous.r;
     float previousAge = previous.g;
-    float storedCharVal = previous.b;
+    float storedCharVal = previous.b; // The current ACTIVE seed for this pixel
 
-    // Safely read the clipboard texture
+    // Read the TARGET clipboard texture (what you just copied)
     float safeLen = max(clipboardLen, 1.0);
     float charIndex = mod(floor(glyphPos.x * 12.34) + glyphPos.y, safeLen);
-    float charVal = texture2D(clipboardTex, vec2((charIndex + 0.5) / safeLen, 0.5)).r;
+    float targetCharVal = texture2D(clipboardTex, vec2((charIndex + 0.5) / safeLen, 0.5)).r;
     
-    // Keep numbers small so the GPU random generator doesn't overflow
-    vec2 seedOffset = fract(vec2(charVal * 12.345, charVal * 98.765)) * 100.0;
+    // ---- THE RIPPLE LOGIC ----
+    float activeCharVal = storedCharVal;
     
-    bool clipboardChanged = abs(charVal - storedCharVal) > 0.001;
+    // Adjust for screen width/height so the ripple is a perfect circle, not an oval
+    vec2 aspect = vec2(numColumns / numRows, 1.0);
+    float distToClick = distance(uvPos * aspect, seedRipplePos * aspect);
+    
+    // Calculate the expanding circle's radius based on elapsed time
+    float elapsedTime = sysTime - seedRippleTime;
+    float currentRippleRadius = elapsedTime * max(rippleSpeed, 1.0) * 1.5; 
+    
+    // If the ripple boundary has washed over this pixel, upgrade to the target seed!
+    if (distToClick < currentRippleRadius) {
+        activeCharVal = targetCharVal;
+    }
+    // --------------------------
+
+    vec2 seedOffset = fract(vec2(activeCharVal * 12.345, activeCharVal * 98.765)) * 100.0;
+    
+    // Did this pixel just get hit by the ripple *this exact frame*?
+    bool clipboardChanged = abs(activeCharVal - storedCharVal) > 0.001;
     bool resetGlyph = isFirstFrame || (previousAge != raindrop.g);
 
     if (resetGlyph || clipboardChanged) {
         previousAge = raindrop.g;
         previousSymbol = floor(glyphSequenceLength * randomFloat(cellPos + seedOffset));
     } else if (cycleSpeed > 0.0 && mod(tick, cycleFrameSkip) < 1.0) {
-        // STRICT CASTING: vec2(tick, tick) ensures the GPU compiler doesn't choke on type mismatches
         previousSymbol = floor(glyphSequenceLength * randomFloat(cellPos + vec2(tick, tick) + seedOffset));
     }
 
-    return vec4(previousSymbol, previousAge, charVal, 1.0);
+    // Save the ACTIVE character value into the Blue channel
+    return vec4(previousSymbol, previousAge, activeCharVal, 1.0);
 }
 
 void main() {
