@@ -19,13 +19,11 @@ uniform float cycleSpeed;
 uniform float rippleSpeed;
 uniform float seedRippleTime;
 uniform vec2 seedRipplePos;
-uniform float sysTime;
 // ----------------------------
 
 uniform bool loops;
 uniform bool showDebugView;
 uniform float glyphSequenceLength;
-uniform float simTime;
 
 highp float randomFloat( const in vec2 uv ) {
     const highp float a = 12.9898, b = 78.233, c = 43758.5453;
@@ -35,6 +33,7 @@ highp float randomFloat( const in vec2 uv ) {
 
 vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPos, vec4 previous, vec4 raindrop) {
     vec2 cellPos = floor(glyphPos);
+    
     float previousSymbol = previous.r;
     float previousAge = previous.g;
     float storedCharVal = previous.b;
@@ -49,12 +48,11 @@ vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPo
     vec2 aspect = vec2(numColumns / numRows, 1.0);
     float distToClick = distance(uvPos * aspect, seedRipplePos * aspect);
     
-    // Calculate radius using simTime and rippleSpeed to match the visual effect
+    // Calculate radius using simTimeArg and rippleSpeed to match the visual effect
     float elapsedTime = simTimeArg - seedRippleTime;
     
-    // We multiply by 0.5 or adjust this multiplier to perfectly 
-    // align with the 'effect' pass ripple speed
-    float currentRippleRadius = elapsedTime * rippleSpeed * 0.5; 
+    // We multiply by 0.5 or adjust this multiplier to perfectly align with the 'effect' pass
+    float currentRippleRadius = elapsedTime * rippleSpeed * 0.5;
     
     if (distToClick < currentRippleRadius) {
         activeCharVal = targetCharVal;
@@ -62,6 +60,7 @@ vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPo
     // ----------------------------
 
     vec2 seedOffset = fract(vec2(activeCharVal * 12.345, activeCharVal * 98.765)) * 100.0;
+    
     bool clipboardChanged = abs(activeCharVal - storedCharVal) > 0.001;
     bool resetGlyph = isFirstFrame || (previousAge != raindrop.g);
 
@@ -76,6 +75,7 @@ vec4 computeResult(float simTimeArg, bool isFirstFrame, vec2 glyphPos, vec2 uvPo
 }
 
 void main() {
+    // This is safe now because we removed the 'uniform float simTime;' from the top!
     float simTime = time * animationSpeed;
     bool isFirstFrame = (tick <= 1.0);
     vec2 glyphPos = gl_FragCoord.xy;
