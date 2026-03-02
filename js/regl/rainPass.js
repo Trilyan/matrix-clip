@@ -36,6 +36,7 @@ export default ({ regl, config, lkg }) => {
 
 	const updateClipboardTexture = (text, event) => {
 		if (text && text.length > 0) {
+			
 			clipboardLength = text.length;
 			const data = new Uint8Array(text.length * 4);
 			for (let i = 0; i < text.length; i++) {
@@ -53,7 +54,7 @@ export default ({ regl, config, lkg }) => {
 			});
 			
 			// Start the ripple timer and grab the click coordinates
-			seedRippleTime = performance.now() / 1000.0;
+			seedRippleTime = config.time * config.animationSpeed;
 			if (event && event.clientX !== undefined) {
 				seedRipplePos = [event.clientX / window.innerWidth, 1.0 - (event.clientY / window.innerHeight)];
 			} else {
@@ -96,7 +97,7 @@ export default ({ regl, config, lkg }) => {
 		}
 	});
 	// --- END Clipboard Integration ---
-	
+
 	const { mat2, mat4, vec2, vec3 } = glMatrix;
 
 	const volumetric = config.volumetric;
@@ -158,14 +159,12 @@ export default ({ regl, config, lkg }) => {
 	
 	const symbolUniforms = {
 		...commonUniforms,
-		// ADD "rippleSpeed" to this array so we can sync the math
 		...extractEntries(config, ["cycleSpeed", "cycleFrameSkip", "loops", "rippleSpeed"]),
 		clipboardTex: () => clipboardTexture,
 		clipboardLen: () => clipboardLength,
-		// ADD our new ripple tracking uniforms
 		seedRippleTime: () => seedRippleTime,
 		seedRipplePos: () => seedRipplePos,
-		sysTime: () => performance.now() / 1000.0
+		simTime: ({time}) => time * config.animationSpeed // Pass the synced time
 	};
 	const symbol = regl({
 		frag: regl.prop("frag"),
