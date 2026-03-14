@@ -33,7 +33,6 @@ Audio system
     Random volume?
     Randomize pitch a little?
 
-Playdate version
   Audio system
     Falling sound
     Launch sound

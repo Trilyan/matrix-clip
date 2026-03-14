@@ -1,0 +1,26 @@
+{
+  "name": "matrix-clip",
+  "version": "1.0.0",
+  "description": "[![Matrix screenshot](/screenshot.png?raw=true \"Matrix's default appearance.\")](https://rezmason.github.io/matrix)",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Trilyan/matrix-clip.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Trilyan/matrix-clip/issues"
+  },
+  "homepage": "https://github.com/Trilyan/matrix-clip#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.0"
+  }
+}
